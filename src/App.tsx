@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 // ВСТАВЬ СВОЮ ССЫЛКУ ИЗ LOCALTUNNEL ЗДЕСЬ
-const LOBBY_SERVER_URL = 'https://ptnt-zr-backend.onrender.com'; 
+const LOBBY_SERVER_URL = 'https://ptnt-zr-mini-app.onrender.com'; 
 
 const socket = io(LOBBY_SERVER_URL, {
   transports: ['websocket'], // Принудительно используем вебсокеты
