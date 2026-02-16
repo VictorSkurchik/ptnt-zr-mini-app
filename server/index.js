@@ -1,7 +1,28 @@
-const lobbies = new Map(); // Храним лобби тут
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+
+// Инициализируем Socket.io с поддержкой CORS для Vercel
+const io = new Server(server, {
+    cors: {
+        // Укажи здесь свой адрес от Vercel БЕЗ слэша в конце
+        origin: "https://ptnt-zr-mini-app.vercel.app", 
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    // Добавляем для стабильности в Telegram
+    transports: ['websocket', 'polling'] 
+});
+
+const lobbies = new Map();
 
 io.on('connection', (socket) => {
-    // Отправляем список лобби при подключении
+    console.log('Новое подключение:', socket.id);
+
+    // Отправляем список лобби при входе
     socket.emit('lobby_list', Array.from(lobbies.values()));
 
     socket.on('create_lobby', (userData) => {
@@ -15,7 +36,8 @@ io.on('connection', (socket) => {
         };
         lobbies.set(lobbyId, newLobby);
         socket.join(lobbyId);
-        io.emit('lobby_list', Array.from(lobbies.values())); // Обновляем список для всех
+        
+        io.emit('lobby_list', Array.from(lobbies.values()));
         socket.emit('lobby_created', newLobby);
     });
 
@@ -36,7 +58,6 @@ io.on('connection', (socket) => {
             if (player) {
                 player.isReady = !player.isReady;
                 
-                // Проверка на автостарт
                 const allReady = lobby.players.length >= 2 && lobby.players.every(p => p.isReady);
                 if (allReady) {
                     lobby.status = 'playing';
@@ -47,4 +68,14 @@ io.on('connection', (socket) => {
             }
         }
     });
+
+    socket.on('disconnect', () => {
+        console.log('Пользователь отключился');
+        // Тут можно добавить логику удаления игрока из лобби при дисконнекте
+    });
+});
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
 });
