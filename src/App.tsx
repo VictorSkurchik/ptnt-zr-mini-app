@@ -17,10 +17,26 @@ const socket = io(LOBBY_SERVER_URL, {
 function App() {
   const [lobbies, setLobbies] = useState<any[]>([]);
   const [lobby, setLobby] = useState<any>(null);
-  const [screen, setScreen] = useState<'MAIN' | 'LOBBY'>('MAIN');
+  const [screen, setScreen] = useState<'MAIN' | 'LOBBY' | 'GAME'>('MAIN');
   const [isJoining, setIsJoining] = useState(false);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [playerProfession, setPlayerProfession] = useState<string | null>(null);
+  const [currentPhase, setCurrentPhase] = useState<string | null>(null);
+  const [currentRound, setCurrentRound] = useState<number>(1);
+  const [result, setResult] = useState<string | null>(null);
+  const [resultVirus, setResultVirus] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [progress, setProgress] = useState<number>(0);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState<number>(0);
+  const loadingMessages = [
+    'Заливаем топливо в бак...',
+    'Достаем реагенты...',
+    'Калибруем датчики...',
+    'Инициализируем атмосферные фильтры...',
+    'Проверяем связь с модулем навигации...',
+    'Подключаем силовые контуры...'
+  ];
 
   const tg = window.Telegram?.WebApp;
   const user = tg?.initDataUnsafe?.user;
@@ -35,6 +51,11 @@ function App() {
     tg?.expand(); // Раскрываем приложение в TG
 
     socket.on('connect', () => setError(null));
+    // при подключении скрываем экран загрузки (прогресс завершится раньше)
+    socket.on('connect', () => {
+      setProgress(100);
+      setTimeout(() => setLoading(false), 600);
+    });
     socket.on('connect_error', () => setError('Нет связи с сервером'));
 
     // Слушаем список всех доступных лобби
@@ -61,10 +82,67 @@ function App() {
       alert('Вас исключили из лобби');
     });
 
-    socket.on('game_start', () => alert('🚀 Игра начинается!'));
+    socket.on('lobby_disbanded', () => {
+      setScreen('MAIN');
+      setLobby(null);
+      setPlayerProfession(null);
+    });
+
+    socket.on('game_start', (data: any) => {
+      setPlayerProfession(data.profession);
+      setCurrentPhase(data.currentPhase);
+      setCurrentRound(data.currentRound);
+      setLobby(data.lobby);
+      setScreen('GAME');
+      alert(`🚀 Игра начинается!\nТвоя профессия: ${data.profession}`);
+    });
+
+    // fake loading progress: запускаем при монтировании
+    let progressInterval: any = null;
+    let messageInterval: any = null;
+    if (loading) {
+      setProgress(0);
+      const totalSeconds = 60; // ~1 minute
+      const step = 100 / totalSeconds; // percent per second
+      progressInterval = setInterval(() => {
+        setProgress(prev => {
+          const val = Math.min(100, +(prev + step).toFixed(2));
+          if (val >= 100) {
+            clearInterval(progressInterval);
+            setTimeout(() => setLoading(false), 600);
+          }
+          return val;
+        });
+      }, 1000);
+
+      // rotate messages every ~8 seconds
+      messageInterval = setInterval(() => {
+        setLoadingMessageIndex(i => (i + 1) % loadingMessages.length);
+      }, 8000);
+    }
+
+    socket.on('phase_update', (data: any) => {
+      setCurrentPhase(data.currentPhase);
+      setCurrentRound(data.currentRound);
+      setLobby((prevLobby: any) => ({
+        ...prevLobby,
+        players: prevLobby.players.map((p: any) => {
+          const updated = data.players.find((u: any) => u.id === p.id);
+          return updated ? { ...p, ...updated } : p;
+        })
+      }));
+    });
+
+    socket.on('game_end', (data: any) => {
+      setResult(data.result);
+      setResultVirus(data.virus);
+      setScreen('RESULT' as any);
+    });
 
     return () => {
       socket.off();
+      if (progressInterval) clearInterval(progressInterval);
+      if (messageInterval) clearInterval(messageInterval);
     };
   }, []);
 
@@ -80,6 +158,14 @@ function App() {
     socket.emit('join_lobby', { lobbyId, userData });
   };
 
+  const handleBack = () => {
+    if (isCreator && lobby?.id) {
+      socket.emit('disband_lobby', { lobbyId: lobby.id });
+    }
+    setScreen('MAIN');
+    setLobby(null);
+  };
+
   const isCreator = lobby?.players[0]?.id === socket.id;
 
   // Фильтрация списка лобби
@@ -90,6 +176,18 @@ function App() {
   return (
     <div className="app-wrapper">
       <div className="content-centered">
+        {loading && (
+          <div className="loading-screen">
+            <div className="loading-box">
+              <div className="loading-title">mini-app загружается</div>
+              <div className="loading-message">{loadingMessages[loadingMessageIndex]}</div>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${progress}%` }} />
+              </div>
+              <div className="progress-percent">{Math.round(progress)}%</div>
+            </div>
+          </div>
+        )}
         {error && <div className="error-badge">{error}</div>}
 
         {screen === 'MAIN' ? (
@@ -126,10 +224,10 @@ function App() {
               {isJoining ? 'Создание...' : 'Создать новое лобби'}
             </button>
           </div>
-        ) : (
+        ) : screen === 'LOBBY' ? (
           <div className="fade-in full-height">
             <div className="lobby-header">
-              <button className="back-link" onClick={() => setScreen('MAIN')}>← Назад</button>
+              <button className="back-link" onClick={() => handleBack()}>← Назад</button>
               <div className="header-info">
                 <h2>Лобби #{lobby?.id}</h2>
                 <span className="players-count">{lobby?.players.length}/{MAX_PLAYERS} игроков</span>
@@ -179,7 +277,122 @@ function App() {
               {lobby?.players.find((p:any) => p.id === socket.id)?.isReady ? 'Я НЕ ГОТОВ' : 'Я ГОТОВ!'}
             </button>
           </div>
-        )}
+        ) : screen === 'GAME' ? (
+          <div className="fade-in full-height game-container">
+            <div className="game-header">
+              <h1 className="game-title">⚡ ФАЗА: {currentPhase === 'day' ? '☀️ ДЕНЬ' : currentPhase === 'voting' ? '🗳️ ГОЛОСОВАНИЕ' : '🌙 НОЧЬ'}</h1>
+              <div className="game-meta">
+                <span className="round-info">Раунд {currentRound}/6</span>
+              </div>
+            </div>
+
+            <div className="profession-card">
+              <div className="profession-label">Твоя профессия:</div>
+              <div className="profession-name">{playerProfession}</div>
+            </div>
+
+            {currentPhase === 'day' && (
+              <div className="phase-action">
+                <p className="phase-description">☀️ День - используй свою способность!</p>
+                <button 
+                  className="primary-btn"
+                  onClick={() => {
+                    socket.emit('use_ability', { 
+                      lobbyId: lobby.id, 
+                      targetPlayerId: lobby.players[0]?.id,
+                      abilityType: 'default'
+                    });
+                  }}
+                >
+                  Использовать способность
+                </button>
+              </div>
+            )}
+
+            {currentPhase === 'voting' && (
+              <div className="phase-action">
+                <p className="phase-description">🗳️ Голосование - отправьте членов экипажа на карантин</p>
+                <div className="vote-list">
+                  {lobby?.players.map((p: any) => (
+                    <button 
+                      key={p.id}
+                      className="vote-btn"
+                      onClick={() => socket.emit('vote', { lobbyId: lobby.id, votedPlayerId: p.id })}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {currentPhase === 'night' && (
+              <div className="phase-action">
+                <p className="phase-description">🌙 Ночь - вирус развивается...</p>
+                <p className="hint">Ждите начала нового дня</p>
+              </div>
+            )}
+
+            <div className="game-info">
+              <p>Игроков в игре: {lobby?.players.length}</p>
+            </div>
+
+            <button 
+              className="secondary-btn"
+              onClick={() => {
+                setScreen('MAIN');
+                setLobby(null);
+                setPlayerProfession(null);
+                setCurrentPhase(null);
+              }}
+            >
+              Вернуться в главное меню
+            </button>
+          </div>
+        ) : screen === 'RESULT' ? (
+          <div className="fade-in full-height">
+            <div className="lobby-header">
+              <h2>{result === 'crew_win' ? 'Победа экипажа 🎉' : 'Поражение — вирус победил 💀'}</h2>
+              <div className="header-info">
+                <span className="players-count">Раунд {currentRound}/{6}</span>
+              </div>
+            </div>
+            <div className="phase-action">
+              <p className="phase-description">{result === 'crew_win' ? 'Все зараженные заключены в карантин — экипаж победил.' : 'Все зараженные остались на корабле — зараженным удалось победить.'}</p>
+            </div>
+
+            {resultVirus && (
+              <div className="virus-report">
+                <div className="virus-title">📋 Отчет о вирусе</div>
+                <div className="virus-info">
+                  <div className="virus-name">🦠 {resultVirus.name}</div>
+                  <div className="virus-stat">
+                    <span className="stat-label">Инфекционность:</span>
+                    <span className="stat-value">{resultVirus.infectivity}%</span>
+                  </div>
+                  <div className="virus-stat">
+                    <span className="stat-label">Период инкубации:</span>
+                    <span className="stat-value">{resultVirus.incubationPeriod} дней</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              className="primary-btn"
+              onClick={() => {
+                setScreen('MAIN');
+                setLobby(null);
+                setPlayerProfession(null);
+                setCurrentPhase(null);
+                setResult(null);
+                setResultVirus(null);
+              }}
+            >
+              Вернуться в главное меню
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

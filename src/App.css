@@ -379,3 +379,252 @@
 .full-height {
   height: 100%;
 }
+
+/* Игровой экран */
+.game-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow-y: auto;
+}
+
+.game-header {
+  text-align: center;
+  padding: 24px 0;
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: 24px;
+}
+
+.game-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--accent);
+  margin: 0;
+  text-shadow: 0 0 10px rgba(74, 158, 255, 0.3);
+}
+
+.profession-card {
+  background: linear-gradient(135deg, rgba(74, 158, 255, 0.1) 0%, rgba(102, 102, 255, 0.1) 100%);
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.profession-label {
+  color: var(--tg-hint);
+  font-size: 13px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.profession-name {
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(74, 158, 255, 0.4);
+}
+
+.game-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.game-info p {
+  color: var(--tg-hint);
+  font-size: 14px;
+  margin: 0;
+}
+
+.game-info .hint {
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Фазы игры */
+.game-meta {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--tg-hint);
+}
+
+.round-info {
+  display: inline-block;
+  background: rgba(74, 158, 255, 0.2);
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.phase-action {
+  background: var(--tg-secondary-bg);
+  border: 1px solid #333333;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.phase-description {
+  color: var(--tg-text);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  text-align: center;
+}
+
+.vote-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.vote-btn {
+  background: var(--tg-secondary-bg);
+  border: 2px solid #333333;
+  color: var(--tg-text);
+  padding: 12px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.vote-btn:hover {
+  border-color: var(--accent);
+  background: rgba(74, 158, 255, 0.1);
+}
+
+.secondary-btn {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #444444;
+  background: var(--tg-secondary-bg);
+  color: var(--tg-text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.secondary-btn:hover {
+  background: #333333;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Loading screen */
+.loading-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(10,10,10,0.8), rgba(10,10,10,0.9));
+  z-index: 1200;
+}
+.loading-box {
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(180deg, #141414, #1e1e1e);
+  border: 1px solid #333;
+  padding: 24px;
+  border-radius: 14px;
+  text-align: center;
+}
+.loading-title {
+  color: var(--tg-text);
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+.loading-message {
+  color: var(--tg-hint);
+  margin-bottom: 16px;
+}
+.progress-bar {
+  height: 12px;
+  background: #111;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #2a2a2a;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #7fb3ff);
+  width: 0%;
+  transition: width 0.9s linear;
+}
+.progress-percent {
+  color: var(--tg-hint);
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* Virus Report Styles */
+.virus-report {
+  background: var(--tg-secondary-bg);
+  border: 2px solid #3a3a3a;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+  margin-bottom: 24px;
+}
+
+.virus-title {
+  color: var(--tg-text);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.virus-info {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.virus-name {
+  color: var(--danger);
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.virus-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #2a2a2a;
+  color: var(--tg-text);
+}
+
+.virus-stat:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  color: var(--tg-hint);
+  font-size: 13px;
+}
+
+.stat-value {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14px;
+}
