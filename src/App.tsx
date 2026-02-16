@@ -5,7 +5,6 @@ import './App.css';
 // Конфигурация лобби
 const MAX_PLAYERS = 6;
 const MIN_PLAYERS = 3;
-const TOTAL_ROUNDS = 6;
 
 // URL твоего бэкенда на Render
 const LOBBY_SERVER_URL = 'https://ptnt-zr-mini-app.onrender.com'; 
