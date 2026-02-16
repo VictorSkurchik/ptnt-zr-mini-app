@@ -29,6 +29,15 @@ function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [progress, setProgress] = useState<number>(0);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState<number>(0);
+  const [checkingCrew, setCheckingCrew] = useState<boolean>(false);
+  const [selectedCrewMember, setSelectedCrewMember] = useState<string | null>(null);
+  const [selectedBodyPart, setSelectedBodyPart] = useState<string | null>(null);
+  const [checkResult, setCheckResult] = useState<{ imagePath: string } | null>(null);
+  const [hasSkipped, setHasSkipped] = useState<boolean>(false);
+  const [votedPlayerId, setVotedPlayerId] = useState<string | null>(null);
+  const [hasVoted, setHasVoted] = useState<boolean>(false);
+  const [isQuarantined, setIsQuarantined] = useState<boolean>(false);
+  const [infectionWarning, setInfectionWarning] = useState<string | null>(null);
   const loadingMessages = [
     'Заливаем топливо в бак...',
     'Достаем реагенты...',
@@ -94,6 +103,7 @@ function App() {
       setCurrentRound(data.currentRound);
       setLobby(data.lobby);
       setScreen('GAME');
+      setIsQuarantined(false);
       alert(`🚀 Игра начинается!\nТвоя профессия: ${data.profession}`);
     });
 
@@ -124,6 +134,8 @@ function App() {
     socket.on('phase_update', (data: any) => {
       setCurrentPhase(data.currentPhase);
       setCurrentRound(data.currentRound);
+      const currentPlayer = data.players.find((p: any) => p.id === socket.id);
+      setIsQuarantined(currentPlayer?.isQuarantined || false);
       setLobby((prevLobby: any) => ({
         ...prevLobby,
         players: prevLobby.players.map((p: any) => {
@@ -139,12 +151,48 @@ function App() {
       setScreen('RESULT' as any);
     });
 
+    socket.on('check_crew_result', (data: any) => {
+      setCheckResult(data);
+      if (data.wasInfected) {
+        setInfectionWarning('⚠️ Вы заразились при проверке!');
+        setTimeout(() => setInfectionWarning(null), 5000);
+      }
+    });
+
     return () => {
       socket.off();
       if (progressInterval) clearInterval(progressInterval);
       if (messageInterval) clearInterval(messageInterval);
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedBodyPart && selectedCrewMember && lobby?.id) {
+      socket.emit('check_crew', {
+        lobbyId: lobby.id,
+        crewMemberId: selectedCrewMember,
+        bodyPart: selectedBodyPart
+      });
+      setSelectedBodyPart(null);
+    }
+  }, [selectedBodyPart, selectedCrewMember, lobby?.id]);
+
+  useEffect(() => {
+    // Обнуляем состояние проверки при смене фазы
+    if (currentPhase !== 'day') {
+      setCheckingCrew(false);
+      setSelectedCrewMember(null);
+      setSelectedBodyPart(null);
+      setCheckResult(null);
+      setHasSkipped(false);
+      setInfectionWarning(null);
+    }
+    // Обнуляем состояние голосования при смене фазы
+    if (currentPhase !== 'voting') {
+      setVotedPlayerId(null);
+      setHasVoted(false);
+    }
+  }, [currentPhase]);
 
   const handleCreate = () => {
     if (isJoining) return;
@@ -286,6 +334,12 @@ function App() {
               </div>
             </div>
 
+            {infectionWarning && (
+              <div className="infection-warning">
+                {infectionWarning}
+              </div>
+            )}
+
             <div className="profession-card">
               <div className="profession-label">Твоя профессия:</div>
               <div className="profession-name">{playerProfession}</div>
@@ -293,36 +347,157 @@ function App() {
 
             {currentPhase === 'day' && (
               <div className="phase-action">
-                <p className="phase-description">☀️ День - используй свою способность!</p>
-                <button 
-                  className="primary-btn"
-                  onClick={() => {
-                    socket.emit('use_ability', { 
-                      lobbyId: lobby.id, 
-                      targetPlayerId: lobby.players[0]?.id,
-                      abilityType: 'default'
-                    });
-                  }}
-                >
-                  Использовать способность
-                </button>
+                {isQuarantined && (
+                  <div className="quarantine-notice">
+                    🚫 Вы находитесь в карантине. Вернетесь в игру на следующий день.
+                  </div>
+                )}
+                <p className="phase-description">☀️ День - проверьте экипаж или пропустите</p>
+                
+                {isQuarantined ? (
+                  <div className="quarantine-waiting">
+                    <p>Ожидайте завершения раунда...</p>
+                  </div>
+                ) : !checkingCrew && !checkResult && !selectedCrewMember && (
+                  <div className="day-actions">
+                    <button 
+                      className="primary-btn"
+                      disabled={hasSkipped}
+                      onClick={() => {
+                        setHasSkipped(true);
+                        socket.emit('skip_day', { lobbyId: lobby.id });
+                      }}
+                    >
+                      {hasSkipped ? 'Вы пропустили день' : 'Пропустить день'}
+                    </button>
+                    <button 
+                      className="secondary-btn"
+                      onClick={() => setCheckingCrew(true)}
+                    >
+                      Проверить экипаж
+                    </button>
+                  </div>
+                )}
+
+                {checkingCrew && !selectedCrewMember && !checkResult && (
+                  <div className="crew-selection">
+                    <p className="selection-title">Выберите члена экипажа для проверки:</p>
+                    <div className="crew-list">
+                      {lobby?.players.filter((p: any) => p.id !== socket.id).map((p: any) => (
+                        <button
+                          key={p.id}
+                          className="crew-btn"
+                          onClick={() => setSelectedCrewMember(p.id)}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="cancel-btn"
+                      onClick={() => {
+                        setCheckingCrew(false);
+                        setSelectedCrewMember(null);
+                      }}
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                )}
+
+                {selectedCrewMember && !checkResult && (
+                  <div className="body-part-selection">
+                    <p className="selection-title">Выберите часть тела для проверки:</p>
+                    <div className="body-parts">
+                      <button
+                        className="part-btn"
+                        onClick={() => setSelectedBodyPart('eyes')}
+                      >
+                        👁️ Глаза
+                      </button>
+                      <button
+                        className="part-btn"
+                        onClick={() => setSelectedBodyPart('hands')}
+                      >
+                        🖐️ Руки
+                      </button>
+                      <button
+                        className="part-btn"
+                        onClick={() => setSelectedBodyPart('mouth')}
+                      >
+                        👄 Рот
+                      </button>
+                    </div>
+                    <button
+                      className="cancel-btn"
+                      onClick={() => {
+                        setSelectedCrewMember(null);
+                        setCheckingCrew(false);
+                      }}
+                    >
+                      Назад
+                    </button>
+                  </div>
+                )}
+
+                {checkResult && (
+                  <div className="check-result">
+                    <p className="result-title">Результат сканирования:</p>
+                    <img src={checkResult.imagePath} alt="scan" className="scan-image" />
+                    <button
+                      className="primary-btn"
+                      onClick={() => {
+                        setCheckResult(null);
+                        setSelectedCrewMember(null);
+                        setSelectedBodyPart(null);
+                        setCheckingCrew(false);
+                      }}
+                    >
+                      Закрыть
+                    </button>
+                  </div>
+                )}
+                ) : null}
               </div>
             )}
 
             {currentPhase === 'voting' && (
               <div className="phase-action">
                 <p className="phase-description">🗳️ Голосование - отправьте членов экипажа на карантин</p>
-                <div className="vote-list">
-                  {lobby?.players.map((p: any) => (
-                    <button 
-                      key={p.id}
-                      className="vote-btn"
-                      onClick={() => socket.emit('vote', { lobbyId: lobby.id, votedPlayerId: p.id })}
+                {isQuarantined ? (
+                  <div className="quarantine-notice">
+                    🚫 Вы находитесь в карантине и не можете голосовать.
+                  </div>
+                ) : (
+                  <>
+                    <div className="vote-list">
+                      {lobby?.players.filter((p: any) => p.id !== socket.id).map((p: any) => (
+                        <button 
+                          key={p.id}
+                          className={`vote-btn ${votedPlayerId === p.id ? 'selected' : ''}`}
+                          onClick={() => {
+                            setVotedPlayerId(p.id);
+                            socket.emit('vote', { lobbyId: lobby.id, votedPlayerId: p.id });
+                            setHasVoted(true);
+                          }}
+                        >
+                          {p.name}
+                          {votedPlayerId === p.id && ' ✓'}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className={`abstain-btn ${hasVoted && votedPlayerId === null ? 'selected' : ''}`}
+                      onClick={() => {
+                        setVotedPlayerId(null);
+                        socket.emit('vote', { lobbyId: lobby.id, votedPlayerId: null });
+                        setHasVoted(true);
+                      }}
                     >
-                      {p.name}
+                      Воздержаться {hasVoted && votedPlayerId === null && '✓'}
                     </button>
-                  ))}
-                </div>
+                  </>
+                )}
               </div>
             )}
 

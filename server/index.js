@@ -167,6 +167,7 @@ function startGame(lobby) {
         player.isInfected = index === infectedIndex;
         player.virus = index === infectedIndex ? selectedVirus : null;
         player.virusLevel = index === infectedIndex ? 1 : 0;
+        player.infectionRound = index === infectedIndex ? 1 : null;
         player.actionUsed = false;
         player.isQuarantined = false;
         player.interactedWith = [];
@@ -201,6 +202,7 @@ function nextPhase(lobby) {
         lobby.quarantinedPlayers = [];
         lobby.players.forEach(p => {
             p.actionUsed = false;
+            p.isQuarantined = false;
         });
     }
     
@@ -225,6 +227,7 @@ function processNightPhase(lobby) {
                 contactedPlayer.isInfected = true;
                 contactedPlayer.virus = infectedPlayer.virus;
                 contactedPlayer.virusLevel = 1;
+                contactedPlayer.infectionRound = lobby.currentRound;
             }
         }
     });
@@ -363,6 +366,9 @@ io.on('connection', (socket) => {
         const lobby = lobbies.get(lobbyId);
         if (!lobby || lobby.currentPhase !== 'voting') return;
         
+        const voter = lobby.players.find(p => p.id === socket.id);
+        if (voter && voter.isQuarantined) return; // Игроки в карантине не могут голосовать
+        
         lobby.votes[socket.id] = votedPlayerId;
     });
 
@@ -382,6 +388,74 @@ io.on('connection', (socket) => {
             targetPlayerId: targetPlayerId,
             abilityType: abilityType
         });
+    });
+
+    // Проверка члена экипажа днем
+    socket.on('check_crew', ({ lobbyId, crewMemberId, bodyPart }) => {
+        const lobby = lobbies.get(lobbyId);
+        if (!lobby || lobby.currentPhase !== 'day') return;
+
+        const crewMember = lobby.players.find(p => p.id === crewMemberId);
+        const checker = lobby.players.find(p => p.id === socket.id);
+        if (!crewMember || !checker) return;
+
+        let imagePath = '';
+        let wasInfected = false;
+
+        // Если игрок заражен - показываем вирусное изображение только если прошел инкубационный период
+        if (crewMember.isInfected) {
+            const incubationPassed = (lobby.currentRound - crewMember.infectionRound) >= crewMember.virus.incubationPeriod;
+            
+            if (incubationPassed) {
+                // Симптомы проявились - показываем вирусное изображение
+                imagePath = crewMember.virus.images[bodyPart];
+            } else {
+                // Инкубационный период не пройден - симптомы скрыты, показываем обычное
+                imagePath = COMMON_IMAGES[bodyPart];
+            }
+            
+            // Проверяющий может заразиться при проверке зараженного
+            const infectivityChance = crewMember.virus.infectivity;
+            const roll = Math.random() * 100;
+            if (roll < infectivityChance && !checker.isInfected) {
+                checker.isInfected = true;
+                checker.virus = crewMember.virus;
+                checker.virusLevel = 1;
+                checker.infectionRound = lobby.currentRound;
+                wasInfected = true;
+            }
+        } else {
+            // Если не заражен, проверяем, проявляет ли он fake симптом
+            const profession = crewMember.profession;
+            const canShowFakeSymptom = profession.affectedPart === bodyPart;
+            
+            if (canShowFakeSymptom) {
+                const showFake = Math.random() < profession.fakeSymptomChance;
+                if (showFake) {
+                    // Находим вирус, который имитирует эта профессия
+                    const mimickedVirus = VIRUSES.find(v => v.id === profession.mimicsVirusId);
+                    if (mimickedVirus) {
+                        imagePath = mimickedVirus.images[bodyPart];
+                    } else {
+                        imagePath = COMMON_IMAGES[bodyPart];
+                    }
+                } else {
+                    imagePath = COMMON_IMAGES[bodyPart];
+                }
+            } else {
+                imagePath = COMMON_IMAGES[bodyPart];
+            }
+        }
+
+        const checkerSocket = io.sockets.sockets.get(socket.id);
+        if (checkerSocket) {
+            checkerSocket.emit('check_crew_result', { imagePath, wasInfected });
+        }
+    });
+
+    socket.on('skip_day', ({ lobbyId }) => {
+        // На данный момент это явльется просто уведомлением
+        // Логика может быть расширена позже для отслеживания, кто пропустил день
     });
 });
 
