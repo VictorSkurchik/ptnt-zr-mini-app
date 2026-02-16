@@ -41,11 +41,38 @@ io.on('connection', (socket) => {
         socket.emit('lobby_created', newLobby);
     });
 
-    socket.on('join_lobby', ({ lobbyId, userData }) => {
+   socket.on('join_lobby', ({ lobbyId, userData }) => {
         const lobby = lobbies.get(lobbyId);
-        if (lobby && lobby.players.length < 4) {
-            lobby.players.push({ id: socket.id, name: userData.name, isReady: false });
+        if (!lobby) return;
+
+        // БАГ-ФИКС: Проверяем, не зашел ли игрок уже в это лобби
+        const isAlreadyIn = lobby.players.find(p => p.id === socket.id);
+        
+        if (!isAlreadyIn && lobby.players.length < 4 && lobby.status === 'waiting') {
+            const newPlayer = { id: socket.id, name: userData.name, isReady: false, photo: userData.photo };
+            lobby.players.push(newPlayer);
             socket.join(lobbyId);
+            
+            // Подтверждаем вход конкретному игроку
+            socket.emit('join_success', lobby); 
+            
+            // Обновляем данные для всех
+            io.to(lobbyId).emit('update_lobby', lobby);
+            io.emit('lobby_list', Array.from(lobbies.values()));
+        }
+    });
+
+    // Логика исключения игрока
+    socket.on('kick_player', ({ lobbyId, playerId }) => {
+        const lobby = lobbies.get(lobbyId);
+        // Только создатель (первый в списке) может кикать
+        if (lobby && lobby.players[0].id === socket.id && lobby.players[0].id !== playerId) {
+            const kickedSocket = io.sockets.sockets.get(playerId);
+            if (kickedSocket) {
+                kickedSocket.leave(lobbyId);
+                kickedSocket.emit('kicked'); // Уведомляем беднягу
+            }
+            lobby.players = lobby.players.filter(p => p.id !== playerId);
             io.to(lobbyId).emit('update_lobby', lobby);
             io.emit('lobby_list', Array.from(lobbies.values()));
         }
