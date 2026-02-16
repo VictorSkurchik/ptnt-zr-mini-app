@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
+import './App.css'; // Добавим стили ниже
 
 // ВСТАВЬ СВОЮ ССЫЛКУ ИЗ LOCALTUNNEL ЗДЕСЬ
 const LOBBY_SERVER_URL = 'https://ptnt-zr-mini-app.onrender.com'; 
@@ -10,69 +11,87 @@ const socket = io(LOBBY_SERVER_URL, {
 });
 
 function App() {
+  const [lobbies, setLobbies] = useState<any[]>([]);
   const [lobby, setLobby] = useState<any>(null);
-  const [screen, setScreen] = useState('MAIN');
-  const [error, setError] = useState<string | null>(null);
+  const [screen, setScreen] = useState<'LIST' | 'LOBBY'>('LIST');
+  const [search, setSearch] = useState('');
   const tg = window.Telegram?.WebApp;
 
   useEffect(() => {
-    socket.on('connect', () => {
-      console.log('✅ Подключено к серверу!');
-      setError(null);
-    });
+    tg?.expand(); // Раскрываем на весь экран
+    socket.on('lobby_list', (list) => setLobbies(list));
+    socket.on('lobby_created', (data) => { setLobby(data); setScreen('LOBBY'); });
+    socket.on('update_lobby', (data) => setLobby(data));
+    socket.on('game_start', () => alert('🚀 ПОЕХАЛИ! Игра началась!'));
 
-    socket.on('connect_error', (err) => {
-      console.error('❌ Ошибка сокета:', err.message);
-      setError('Ошибка связи с сервером');
-    });
-
-    socket.on('lobby_created', (newLobby) => {
-      setLobby(newLobby);
-      setScreen('GAME_LOBBY');
-    });
-
-    socket.on('update_lobby', (updatedLobby) => {
-      setLobby(updatedLobby);
-    });
-
-    return () => {
-      socket.off('connect');
-      socket.off('connect_error');
-      socket.off('lobby_created');
-      socket.off('update_lobby');
-    };
+    return () => { socket.off(); };
   }, []);
 
-  const handleCreate = () => {
-    const userData = { 
-      name: tg?.initDataUnsafe?.user?.first_name || 'Liza' 
-    };
-    socket.emit('create_lobby', userData);
-  };
+  const userData = { name: tg?.initDataUnsafe?.user?.first_name || 'Игрок' };
+
+  const filteredLobbies = lobbies.filter(l => 
+    l.id.includes(search.toUpperCase()) || l.creator.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="container">
-      {error && <div className="error-badge">{error}</div>}
-      
-      {screen === 'MAIN' && (
-        <div className="menu">
-          <h1>Game Menu</h1>
-          <button className="primary-btn" onClick={handleCreate}>Создать лобби</button>
-        </div>
-      )}
+    <div className="app-container">
+      {screen === 'LIST' ? (
+        <div className="fade-in">
+          <header>
+            <h1>Игровые лобби</h1>
+            <input 
+              type="text" 
+              placeholder="Поиск по коду или автору..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </header>
 
-      {screen === 'GAME_LOBBY' && lobby && (
-        <div className="lobby">
-          <h2>Лобби: {lobby.id}</h2>
-          <div className="player-list">
-            {lobby.players.map((p: any) => (
-              <div key={p.id} className="player-item">
-                {p.name} {p.isReady ? '✅' : '⏳'}
+          <div className="lobby-list">
+            {filteredLobbies.map(l => (
+              <div key={l.id} className="lobby-card">
+                <div>
+                  <strong>#{l.id}</strong>
+                  <p>Создатель: {l.creator}</p>
+                </div>
+                <div className="lobby-info">
+                  <span>👤 {l.players.length}/4</span>
+                  <button 
+                    disabled={l.players.length >= 4}
+                    onClick={() => socket.emit('join_lobby', { lobbyId: l.id, userData })}
+                  >
+                    Вход
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-          <button onClick={() => socket.emit('player_ready', { lobbyId: lobby.id })}>
-            Готов
+
+          <button className="main-button" onClick={() => socket.emit('create_lobby', userData)}>
+            Создать новое лобби
+          </button>
+        </div>
+      ) : (
+        <div className="lobby-view fade-in">
+          <button className="back-btn" onClick={() => setScreen('LIST')}>← Выйти</button>
+          <h2>Лобби #{lobby?.id}</h2>
+          
+          <div className="players-grid">
+            {lobby?.players.map((p: any) => (
+              <div key={p.id} className={`player-slot ${p.isReady ? 'ready' : ''}`}>
+                <div className="avatar">{p.name[0]}</div>
+                <span>{p.name}</span>
+                {p.isReady && <div className="ready-badge">ГОТОВ</div>}
+              </div>
+            ))}
+            {[...Array(4 - (lobby?.players.length || 0))].map((_, i) => (
+              <div key={i} className="player-slot empty">Свободно</div>
+            ))}
+          </div>
+
+          <button className={`ready-btn ${lobby?.players.find((p:any) => p.id === socket.id)?.isReady ? 'is-ready' : ''}`}
+            onClick={() => socket.emit('player_ready', { lobbyId: lobby.id })}>
+            {lobby?.players.find((p:any) => p.id === socket.id)?.isReady ? 'Отменить готовность' : 'Я готов!'}
           </button>
         </div>
       )}
