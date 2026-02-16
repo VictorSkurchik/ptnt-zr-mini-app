@@ -21,7 +21,7 @@ function App() {
   const [isJoining, setIsJoining] = useState(false);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [playerProfession, setPlayerProfession] = useState<string | null>(null);
+  const [playerProfession, setPlayerProfession] = useState<any>(null);
   const [currentPhase, setCurrentPhase] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState<number>(1);
   const [result, setResult] = useState<string | null>(null);
@@ -98,13 +98,14 @@ function App() {
     });
 
     socket.on('game_start', (data: any) => {
+      setLoading(false);
       setPlayerProfession(data.profession);
       setCurrentPhase(data.currentPhase);
       setCurrentRound(data.currentRound);
       setLobby(data.lobby);
       setScreen('GAME');
       setIsQuarantined(false);
-      alert(`🚀 Игра начинается!\nТвоя профессия: ${data.profession}`);
+      alert(`🚀 Игра начинается!\nТвоя профессия: ${data.profession.name}`);
     });
 
     // fake loading progress: запускаем при монтировании
@@ -342,7 +343,7 @@ function App() {
 
             <div className="profession-card">
               <div className="profession-label">Твоя профессия:</div>
-              <div className="profession-name">{playerProfession}</div>
+              <div className="profession-name">{playerProfession?.name}</div>
             </div>
 
             {currentPhase === 'day' && (
