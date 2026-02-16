@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import './App.css';
 
+// Конфигурация лобби
+const MAX_PLAYERS = 6;
+const MIN_PLAYERS = 3;
+const TOTAL_ROUNDS = 6;
+
 // URL твоего бэкенда на Render
 const LOBBY_SERVER_URL = 'https://ptnt-zr-mini-app.onrender.com'; 
 
@@ -109,10 +114,10 @@ function App() {
                   </div>
                   <button 
                     className="join-btn"
-                    disabled={isJoining || l.players.length >= 4}
+                    disabled={isJoining || l.players.length >= MAX_PLAYERS}
                     onClick={() => handleJoin(l.id)}
                   >
-                    {isJoining ? '...' : `${l.players.length}/4`}
+                    {isJoining ? '...' : `${l.players.length}/${MAX_PLAYERS}`}
                   </button>
                 </div>
               )) : <p className="empty-text">Лобби не найдены</p>}
@@ -126,7 +131,10 @@ function App() {
           <div className="fade-in full-height">
             <div className="lobby-header">
               <button className="back-link" onClick={() => setScreen('MAIN')}>← Назад</button>
-              <h2>Лобби #{lobby?.id}</h2>
+              <div className="header-info">
+                <h2>Лобби #{lobby?.id}</h2>
+                <span className="players-count">{lobby?.players.length}/{MAX_PLAYERS} игроков</span>
+              </div>
             </div>
 
             <div className="players-grid">
@@ -140,7 +148,7 @@ function App() {
                     )}
                     {p.isReady && <div className="ready-badge">✓</div>}
                   </div>
-                  <span className="player-name">{p.name}</span>
+                  <span className="player-name">👨‍🚀 {p.name}</span>
                   
                   {isCreator && p.id !== socket.id && (
                     <button 
@@ -153,12 +161,16 @@ function App() {
                 </div>
               ))}
               {/* Пустые слоты */}
-              {[...Array(4 - (lobby?.players.length || 0))].map((_, i) => (
+              {[...Array(MAX_PLAYERS - (lobby?.players.length || 0))].map((_, i) => (
                 <div key={i} className="player-card empty">
-                  <div className="avatar-placeholder">?</div>
-                  <span className="player-name">Свободно</span>
                 </div>
               ))}
+            </div>
+
+            <div className="start-info">
+              {lobby.players.length < MIN_PLAYERS ? (
+                <p className="min-players-info">Нужно минимум {MIN_PLAYERS} игрока для старта (сейчас {lobby.players.length})</p>
+              ) : null}
             </div>
 
             <button 

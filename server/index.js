@@ -2,6 +2,11 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
+// Конфигурация лобби
+const MAX_PLAYERS = 6;
+const MIN_PLAYERS = 3;
+const TOTAL_ROUNDS = 6;
+
 const app = express();
 const server = http.createServer(app);
 
@@ -31,7 +36,7 @@ io.on('connection', (socket) => {
             id: lobbyId,
             creator: userData.name,
             players: [{ id: socket.id, name: userData.name, isReady: false }],
-            maxPlayers: 4,
+            maxPlayers: MAX_PLAYERS,
             status: 'waiting'
         };
         lobbies.set(lobbyId, newLobby);
@@ -48,7 +53,7 @@ io.on('connection', (socket) => {
         // БАГ-ФИКС: Проверяем, не зашел ли игрок уже в это лобби
         const isAlreadyIn = lobby.players.find(p => p.id === socket.id);
         
-        if (!isAlreadyIn && lobby.players.length < 4 && lobby.status === 'waiting') {
+        if (!isAlreadyIn && lobby.players.length < MAX_PLAYERS && lobby.status === 'waiting') {
             const newPlayer = { id: socket.id, name: userData.name, isReady: false, photo: userData.photo };
             lobby.players.push(newPlayer);
             socket.join(lobbyId);
@@ -85,7 +90,7 @@ io.on('connection', (socket) => {
             if (player) {
                 player.isReady = !player.isReady;
                 
-                const allReady = lobby.players.length >= 2 && lobby.players.every(p => p.isReady);
+                const allReady = lobby.players.length >= MIN_PLAYERS && lobby.players.every(p => p.isReady);
                 if (allReady) {
                     lobby.status = 'playing';
                     io.to(lobbyId).emit('game_start', lobby);
